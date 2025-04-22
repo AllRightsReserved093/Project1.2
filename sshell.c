@@ -10,6 +10,49 @@
 #define MAX_ARGS 16
 #define MAX_PIPE 3
 
+// Redirect input to file
+int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
+{
+    const char *redir = strchr(cmdLine, '<');
+    if (!redir)
+    {
+        strcpy(cmdOutput, cmdLine);
+        fileInput[0] = '\0';
+        return 0;
+    }
+
+    // Copy command part to send to input file
+    size_t cmdLength = redir - cmdLine;
+    strncpy(cmdOutput, cmdLine, cmdLength);
+    cmdOutput[cmdLength] = '\0';
+
+    // Reads file name
+    redir++;
+    while (*redir == ' ' || *redir == '\t')
+        redir++;
+
+    // Copies file name for input file
+    strcpy(fileInput, redir);
+
+    // Removes whitespace
+    char *end = fileInput + strlen(fileInput) - 1;
+    while (end > fileInput && (*end == ' ' || *end == '\n' || *end == '\t'))
+    {
+        *end-- = '\0';
+    }
+
+    // If file isn't specified
+    if (strlen(fileInput) == 0)
+    {
+        fprintf(stderr, "Error: no input file\n");
+        fflush(stderr);
+        return -1;
+    }
+
+    return 1;
+}
+
+
 // Redirect output to file
 int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
 {
@@ -41,8 +84,17 @@ int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
         *end-- = '\0';
     }
 
+    // If file isn't specified
+    if (strlen(fileOutput) == 0)
+    {
+        fprintf(stderr, "Error: no output file\n");
+        fflush(stderr);
+        return -1;
+    }
+
     return 1; 
 }
+
 
 //implement syscall()
 int mySystem(const char *cmdLine){
@@ -52,10 +104,20 @@ int mySystem(const char *cmdLine){
     int ec = 0;
     int exitCode = 0;
     char cmdCopy[CMDLINE_MAX];
-    char cmdParsed[CMDLINE_MAX];
+    char cmdParsed[CMDLINE_MAX]; // includes cmd after removing both input and output
+    char cmdParsed2[CMDLINE_MAX]; // includes only cmd and output command after removing input
     char fileOutput[CMDLINE_MAX];
+    char fileInput[CMDLINE_MAX];
 
-    int redirection = outputRedirection(cmdLine, cmdParsed, fileOutput);
+    int inputRedirect = inputRedirection(cmdLine, cmdParsed2, fileInput);
+    int outputRedirect = outputRedirection(cmdParsed2, cmdParsed, fileOutput);
+
+    // To handle printing error messages twice
+    if (inputRedirect == -1 || outputRedirect == -1)
+    {
+        return 1;
+    }
+
     strncpy(cmdCopy, cmdParsed, sizeof(cmdCopy));
 
     pid_t pid = fork();  // fork
@@ -94,13 +156,27 @@ int mySystem(const char *cmdLine){
         args[++i] = "NULL";
         fflush(stdout);
 
+        // Input redirection
+        if (inputRedirect)
+        {
+            int fd = open(fileInput, O_RDONLY);
+            if (fd < 0)
+            {
+                fprintf(stderr, "Error: cannot open input file\n");
+                fflush(stderr);
+                exit(errno);
+            }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+        }
+
         // Output redirection
-        if (redirection)
+        if (outputRedirect)
         {
             int fd = open(fileOutput, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (fd < 0)
             {
-                fprintf(stderr, "Error: open file failed\n");
+                fprintf(stderr, "Error: cannot open output file\n");
                 fflush(stderr);
                 exit(errno);
             }
@@ -150,6 +226,28 @@ int mySystem(const char *cmdLine){
         }
     }
     return exitCode;
+}
+
+int mislocatedRedirection(const char *cmd)
+{
+    const char *inputMisRedirect = strchr(cmd, '<');
+    const char *outputMisRedirect = strchr(cmd, '>');
+    const char *pipe = strchr(cmd, '|');
+
+    if (!pipe)
+        return 0;
+
+    if (inputMisRedirect && inputMisRedirect < pipe)
+    {
+        return 1;
+    }
+
+    if (outputMisRedirect && outputMisRedirect < pipe)
+    {
+        return 2;
+    }
+
+    return 0;
 }
 
 //implement syscall() with pipe
@@ -310,6 +408,21 @@ int main(void){
             break;
         }
 
+        // Handles mislocated redirection error
+        int misRedirError = mislocatedRedirection(cmd);
+        if (misRedirError)
+        {
+            if (misRedirError == 1)
+            {
+                fprintf(stderr, "Error: mislocated input redirection\n");
+            }
+            else if (misRedirError == 2)
+            {
+                fprintf(stderr, "Error: mislocated output redirection\n");
+            }
+            fflush(stderr);
+            continue;
+        }
 
         int pSkip = 1;
         // Pipe or no pipe
