@@ -17,12 +17,13 @@ int mySystem(const char *cmdLine){
     int exitCode = 0;
     char cmdCopy[512];
     
-    pid_t pid = fork();  // 创建一个子进程
+    pid_t pid = fork();  // fork
 
     if (pid < 0) {
         perror("fork failed");
         exit(errno);
-    } else if (pid == 0) {  // 子进程
+    
+    } else if (pid == 0) {  // child
         i = 0;
         strncpy(cmdCopy, cmdLine, sizeof(cmdCopy));
 
@@ -53,7 +54,7 @@ int mySystem(const char *cmdLine){
         args[++i] = "NULL";
         fflush(stdout);
 
-        //
+        // Search command in PASS
         char *Ktoken = strtok(path_env, ":");
         while (1) {
             Ktoken = strtok(NULL, ":");
@@ -71,6 +72,7 @@ int mySystem(const char *cmdLine){
             fflush(stderr);
             exit(255);
         }
+        
         
         if (execv(fullpath, args) == -1) {
             
@@ -123,7 +125,7 @@ void printWorkingDirectory(){
     char* cwd = getcwd(NULL, 0);
     if (!cwd) {
         // print the error stderr
-        perror("getcwd failed");
+        perror("getcwd failed\n");
         return;
     }
     
@@ -145,7 +147,7 @@ int changeDirectory(const char *cmd){
         return -1;
     }else if(chdir(argv[1]) != 0){
         // chdir() error
-        fprintf(stderr, "Error: cannot cd into directory");
+        fprintf(stderr, "Error: cannot cd into directory\n");
         fflush(stderr);
         free(argv[MAX_ARGS+1]);
         free(argv);
@@ -198,23 +200,39 @@ int main(void){
             break;
         }
 
-        int pSkip = 1;
 
-        //pwd
-        if(!strcmp(cmd, "pwd")){
-            printWorkingDirectory();
+
+
+
+
+
+
+
+        if(pipe){
+
+        }else{
+            // Normal no pipe code
+
+            int pSkip = 1;
+
+            //pwd
+            if(!strcmp(cmd, "pwd")){
+                printWorkingDirectory();
+                int pSkip = 0;
+            }
+    
+            //pwd
+            if(!strncmp(cmd, "cd", 2)){
+                pSkip = changeDirectory(cmd);
+            }
+    
+            /* Regular command */
+            // skip systemCall if pSkip = 1
+            if(pSkip == 1){
+                retval = mySystem(cmd);
+            }
         }
 
-        //pwd
-        if(!strncmp(cmd, "cd", 2)){
-            pSkip = changeDirectory(cmd);
-        }
-
-        /* Regular command */
-        // skip systemCall if pSkip = 1
-        if(pSkip == 1){
-            retval = mySystem(cmd);
-        }
 
         if(retval == 255 || pSkip == -1){
             // Skip output complete message if retval = 255
