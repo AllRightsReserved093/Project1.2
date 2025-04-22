@@ -7,6 +7,7 @@
 
 #define CMDLINE_MAX 512
 #define MAX_ARGS 16
+#define MAX_PIPE 3
 
 //implement syscall()
 int mySystem(const char *cmdLine){
@@ -98,6 +99,10 @@ int mySystem(const char *cmdLine){
     return exitCode;
 }
 
+//implement syscall() with pipe
+int mySysPipe(const char *cmd){
+    
+}
 
 char **sArgs(const char *cmdline, int *err) {
     char *buf = strdup(cmdline);
@@ -119,6 +124,52 @@ char **sArgs(const char *cmdline, int *err) {
     return args;
 }
 
+// Split commands
+// Input full command line, and a int to store # of pipes
+char **splitCmds(const char *cmd, int *pipeNum) {
+    char *buf = strdup(cmd);
+    if (!buf) {
+        perror("strdup");
+        exit(255);
+    }
+
+    char **cmds = malloc((MAX_PIPE + 2) * sizeof *cmds);
+    if (!cmds) {
+        perror("malloc");
+        free(buf);
+        exit(255);
+    }
+
+    // split cmd
+    int count = 0;
+    char *saveptr = NULL;
+    char *seg = strtok_r(buf, "|", &saveptr);
+    while (seg) {
+        if (count >= MAX_PIPE + 1) {
+            fprintf(stderr, "Error: too many pipes (max %d)\n", MAX_PIPE);
+            fflush(stderr);
+            free(buf);
+            free(cmds);
+            exit(255);
+        }
+
+        // remove space
+        while (*seg == ' ' || *seg == '\t') seg++;
+        char *end = seg + strlen(seg) - 1;
+        while (end > seg && (*end == ' ' || *end == '\t' || *end == '\n'))
+            *end-- = '\0';
+
+        cmds[count++] = seg;
+        seg = strtok_r(NULL, "|", &saveptr);
+    }
+
+    // append NULL at the end
+    cmds[count] = NULL;
+    cmds[MAX_PIPE+1] = buf;
+
+    *pipeNum = (count > 0 ? count - 1 : 0);
+    return cmds;
+}
 
 //implement pwd(Print Working Directory)
 void printWorkingDirectory(){
@@ -160,7 +211,9 @@ int changeDirectory(const char *cmd){
     return 0;
 }
 
-
+int hasPipe(const char *s) {
+    return strchr(s, '|') != NULL;
+}
 
 int main(void){
     char cmd[CMDLINE_MAX];
@@ -202,13 +255,10 @@ int main(void){
 
 
 
-
-
-
-
-
-
-        if(pipe){
+        // Pipe or no pipe
+        if(hasPipe(cmd)){
+            // With pipe
+            retval = mySysPipe(cmd);
 
         }else{
             // Normal no pipe code
