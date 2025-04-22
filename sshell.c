@@ -155,10 +155,10 @@ int main(void){
             break;
         }
 
-        //cd
-        char* firstToken = strtok(cmd, " ");
-        if(firstToken == "cd"){
+        //pwd
+        if(!strcmp(cmd, "pwd")){
             printWorkingDirectory();
+            continue;
         }
 
         /* Regular command */
