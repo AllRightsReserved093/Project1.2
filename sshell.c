@@ -4,20 +4,60 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <fcntl.h>
 
 #define CMDLINE_MAX 512
 #define MAX_ARGS 16
 #define MAX_PIPE 3
 
+// Redirect output to file
+int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
+{
+    const char *redir = strchr(cmdLine, '>');
+    if (!redir)
+    {
+        strcpy(cmdOutput, cmdLine);
+        fileOutput[0] = '\0';
+        return 0;
+    }
+
+    // Copy command part to send to output file
+    size_t cmdLength = redir - cmdLine;
+    strncpy(cmdOutput, cmdLine, cmdLength);
+    cmdOutput[cmdLength] = '\0';
+
+    // Reads file name
+    redir++;
+    while (*redir == ' ' || *redir == '\t')
+        redir++;
+
+    // Copies file name for output file
+    strcpy(fileOutput, redir);
+
+    // Removes whitespace 
+    char *end = fileOutput + strlen(fileOutput) - 1;
+    while (end > fileOutput && (*end == ' ' || *end == '\n' || *end == '\t'))
+    {
+        *end-- = '\0';
+    }
+
+    return 1; 
+}
+
 //implement syscall()
 int mySystem(const char *cmdLine){
     int i;
-    char *args[MAX_ARGS + 1]; // 最多 16 个参数，加 1 作为结尾 NULL
+    char *args[MAX_ARGS + 1]; // Up to 16 parameters + 1 for terminating NULL
     int err;
     int ec = 0;
     int exitCode = 0;
-    char cmdCopy[512];
-    
+    char cmdCopy[CMDLINE_MAX];
+    char cmdParsed[CMDLINE_MAX];
+    char fileOutput[CMDLINE_MAX];
+
+    int redirection = outputRedirection(cmdLine, cmdParsed, fileOutput);
+    strncpy(cmdCopy, cmdParsed, sizeof(cmdCopy));
+
     pid_t pid = fork();  // fork
 
     if (pid < 0) {
@@ -26,7 +66,6 @@ int mySystem(const char *cmdLine){
     
     } else if (pid == 0) {  // child
         i = 0;
-        strncpy(cmdCopy, cmdLine, sizeof(cmdCopy));
 
         char *path_env = getenv("PATH");
         char fullpath[256];
@@ -55,7 +94,21 @@ int mySystem(const char *cmdLine){
         args[++i] = "NULL";
         fflush(stdout);
 
-        // Search command in PASS
+        // Output redirection
+        if (redirection)
+        {
+            int fd = open(fileOutput, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0)
+            {
+                fprintf(stderr, "Error: open file failed\n");
+                fflush(stderr);
+                exit(errno);
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
+
+        // Search command in PATH
         char *Ktoken = strtok(path_env, ":");
         while (1) {
             Ktoken = strtok(NULL, ":");
@@ -80,11 +133,11 @@ int mySystem(const char *cmdLine){
             if (errno == ENOENT) {
                 exit(errno);
             }
-            
-        // 如果 execvp 返回，则说明出错
-        
+        // If execvp returns, error has occurred
         exit(errno);
         }
+    
+    // parent
     } else {  
         int status;
         waitpid(pid, &status, 0);
@@ -106,7 +159,7 @@ int mySysPipe(const char *cmd){
 
 // Split Arguments
 // Input command line, and a int to receive err output
-// err = 0 if no error, err = 1 if too amany arguments(skip printing complete message)
+// err = 0 if no error, err = 1 if too many arguments(skip printing complete message)
 char **sArgs(const char *cmdline, int *err) {
     char *buf = strdup(cmdline);
     char **args = malloc((MAX_ARGS + 2) * sizeof *args);
