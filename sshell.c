@@ -97,31 +97,22 @@ int mySystem(const char *cmdLine){
 }
 
 
-char **sArgs(const char *cmdline, int *out_count) {
+char **sArgs(const char *cmdline, int *err) {
     char *buf = strdup(cmdline);
-    if (!buf) {
-        perror("strdup");
-        exit(255);
-    }
-
     char **args = malloc((MAX_ARGS + 2) * sizeof *args);
-    if (!args) {
-        perror("malloc");
-        exit(255);
-    }
 
     int i = 0;
     char *tok = strtok(buf, " ");
     while (tok) {
         if (i >= MAX_ARGS) {
             fprintf(stderr, "Error: too many arguments (max %d)\n", MAX_ARGS);
-            out_count = 1;
+            *err = 1;
         }
         args[i++] = tok;
         tok = strtok(NULL, " ");
     }
     args[i] = NULL;
-    *out_count = 0;
+    *err = 0;
 
     return args;
 }
