@@ -97,6 +97,36 @@ int mySystem(const char *cmdLine){
 }
 
 
+char **sArgs(const char *cmdline, int *out_count) {
+    char *buf = strdup(cmdline);
+    if (!buf) {
+        perror("strdup");
+        exit(255);
+    }
+
+    char **args = malloc((MAX_ARGS + 2) * sizeof *args);
+    if (!args) {
+        perror("malloc");
+        exit(255);
+    }
+
+    int i = 0;
+    char *tok = strtok(buf, " ");
+    while (tok) {
+        if (i >= MAX_ARGS) {
+            fprintf(stderr, "Error: too many arguments (max %d)\n", MAX_ARGS);
+            out_count = 1;
+        }
+        args[i++] = tok;
+        tok = strtok(NULL, " ");
+    }
+    args[i] = NULL;
+    *out_count = 0;
+
+    return args;
+}
+
+
 //implement pwd(Print Working Directory)
 void printWorkingDirectory(){
     char* cwd = getcwd(NULL, 0);
@@ -113,7 +143,29 @@ void printWorkingDirectory(){
 }
 
 //implement cd(Change Directory)
-int changeDirectory(const char *);
+int changeDirectory(const char *cmd){
+    int i;
+
+    char **argv = sArgs(cmd, &i);
+    if(i == 1){
+        // Too many arguments
+        free(argv[MAX_ARGS+1]);
+        free(argv);
+        return -1;
+    }else if(chdir(argv[1]) != 0){
+        // chdir() error
+        fprintf(stderr, "Error: cannot cd into directory");
+        fflush(stderr);
+        free(argv[MAX_ARGS+1]);
+        free(argv);
+        return -2;
+    }
+
+    free(argv[MAX_ARGS+1]);
+    free(argv);
+
+    return 0;
+}
 
 
 
@@ -155,16 +207,27 @@ int main(void){
             break;
         }
 
+        int pSkip = 1;
+
         //pwd
         if(!strcmp(cmd, "pwd")){
             printWorkingDirectory();
-            continue;
+            pSkip = 0;
+        }
+
+        //pwd
+        if(!strcmp(cmd, "cd")){
+            pSkip = changeDirectory(cmd);
         }
 
         /* Regular command */
-        retval = mySystem(cmd);
-        if(retval == 255){
-            
+        // skip systemCall if pSkip = 1
+        if(pSkip != 1){
+            retval = mySystem(cmd);
+        }
+
+        if(retval == 255 || pSkip == -1){
+            // Skip output complete message if retval = 255
         }else{
             fprintf(stderr, "+ completed '%s' [%d]\n", cmd, retval);
             fflush(stderr);
