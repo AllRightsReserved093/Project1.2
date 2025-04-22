@@ -104,6 +104,9 @@ int mySysPipe(const char *cmd){
     
 }
 
+// Split Arguments
+// Input command line, and a int to receive err output
+// err = 0 if no error, err = 1 if too amany arguments(skip printing complete message)
 char **sArgs(const char *cmdline, int *err) {
     char *buf = strdup(cmdline);
     char **args = malloc((MAX_ARGS + 2) * sizeof *args);
