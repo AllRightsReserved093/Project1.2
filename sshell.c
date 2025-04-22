@@ -8,6 +8,7 @@
 #define CMDLINE_MAX 512
 #define MAX_ARGS 16
 
+//implement syscall()
 int mySystem(const char *cmdLine){
     int i;
     char *args[MAX_ARGS + 1]; // 最多 16 个参数，加 1 作为结尾 NULL
@@ -95,6 +96,27 @@ int mySystem(const char *cmdLine){
     return exitCode;
 }
 
+
+//implement pwd(Print Working Directory)
+void printWorkingDirectory(){
+    char* cwd = getcwd(NULL, 0);
+    if (!cwd) {
+        // print the error stderr
+        perror("getcwd failed");
+        return;
+    }
+    
+    printf("%s\n", cwd);
+    free(cwd);
+    fflush(stdout);
+    return;
+}
+
+//implement cd(Change Directory)
+int changeDirectory(const char *);
+
+
+
 int main(void){
     char cmd[CMDLINE_MAX];
     char *eof;
@@ -131,6 +153,12 @@ int main(void){
             fprintf(stderr, "+ completed 'exit' [0]\n");
             fflush(stderr);
             break;
+        }
+
+        //cd
+        char* firstToken = strtok(cmd, " ");
+        if(firstToken == "cd"){
+            printWorkingDirectory();
         }
 
         /* Regular command */
