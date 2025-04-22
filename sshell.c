@@ -203,17 +203,16 @@ int main(void){
         //pwd
         if(!strcmp(cmd, "pwd")){
             printWorkingDirectory();
-            pSkip = 0;
         }
 
         //pwd
-        if(!strcmp(cmd, "cd")){
+        if(!strncmp(cmd, "cd", 2)){
             pSkip = changeDirectory(cmd);
         }
 
         /* Regular command */
         // skip systemCall if pSkip = 1
-        if(pSkip != 1){
+        if(pSkip == 1){
             retval = mySystem(cmd);
         }
 
