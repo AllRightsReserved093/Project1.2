@@ -229,6 +229,7 @@ int main(void){
 
         /* Get command line */
         eof = fgets(cmd, CMDLINE_MAX, stdin);
+
         if (!eof)
             /* Make EOF equate to exit */
             strncpy(cmd, "exit\n", CMDLINE_MAX);
@@ -254,28 +255,23 @@ int main(void){
         }
 
 
-
+        int pSkip = 1;
         // Pipe or no pipe
         if(hasPipe(cmd)){
             // With pipe
             retval = mySysPipe(cmd);
-
         }else{
             // Normal no pipe code
-
-            int pSkip = 1;
 
             //pwd
             if(!strcmp(cmd, "pwd")){
                 printWorkingDirectory();
-                int pSkip = 0;
+                pSkip = 0;
             }
-    
-            //pwd
+            //cd
             if(!strncmp(cmd, "cd", 2)){
                 pSkip = changeDirectory(cmd);
             }
-    
             /* Regular command */
             // skip systemCall if pSkip = 1
             if(pSkip == 1){
