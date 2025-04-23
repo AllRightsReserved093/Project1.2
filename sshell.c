@@ -485,6 +485,22 @@ int main(void){
             fflush(stderr);
             continue;
         }
+        
+        // background task
+        size_t len = strlen(cmd);
+        if(len > 0 && cmd[len-1] == '&'){
+            if(fork()){ // back ground job
+                // remove the '&' at the end
+                cmd[--len] = '\0';
+
+                //remove the space before '&'
+                while (len > 0 && isspace((unsigned char)cmd[len-1])) {
+                    cmd[--len] = '\0';
+                }           
+            }else{
+                continue;
+            } 
+        }
 
         int pSkip = 1;
         // Pipe or no pipe
