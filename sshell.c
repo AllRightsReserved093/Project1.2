@@ -343,53 +343,48 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 }
 
 // implement syscall() with pipe
-int mySysPipe(const char *cmd){
-    // the input has "|" in it, it has pipes
-    int errorCode;
-    int pipeNum = 0;
-    
-    // get cmds
-    char **cmds = splitCmds(cmd, &pipeNum);
+int mySysPipe(const char *cmdLine) {
+    int pipeNum;
+    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数
 
-    // get args
-    char ***args = malloc(sizeof(cmd));
-    if (!args) {
-        perror("malloc args");
-        exit(1);
-    }
-    for(int i = 0; i <= pipeNum; i++){
-        args[i] = sArgs(cmd, &errorCode);
+    char ***args = malloc((pipeNum+1) * sizeof(char**));
+    if (!args) { perror("malloc args"); return -1; }
+    for (int i = 0; i <= pipeNum; i++) {
+        int err;
+        args[i] = sArgs(cmds[i], &err);
+        if (err) { }
     }
 
-    // if it has more pipes than limit, return -1
-    // return -2 for any other error
-    int (*fds)[2] = malloc(sizeof(int[2]) * pipeNum);
-    errorCode = createPipes(pipeNum, fds);
-    
-    int cmdN = 0;
-    for(int i = 0; i < pipeNum; i++){
-        if (i > 0) {
-            dup2(fds[i-1][0], STDIN_FILENO);
-        }
-        if (i < pipeNum-1) {
-            dup2(fds[i][1], STDOUT_FILENO);
-        }
-        for (int j = 0; j < pipeNum-1; ++j) {
-            close(fds[j][0]);
-            close(fds[j][1]);
-        }
-        if (fork() == 0) { 
+    int (*fds)[2] = malloc(pipeNum * sizeof(int[2]));
+    int err = createPipes(pipeNum, fds);
+
+    for (int i = 0; i <= pipeNum; i++) {
+        pid_t pid = fork();
+        if (pid < 0) { perror("fork"); exit(1); }
+        if (pid == 0) {
+            if (i > 0)              dup2(fds[i-1][0], STDIN_FILENO);
+            if (i < pipeNum)        dup2(fds[i][1], STDOUT_FILENO);
+
+            for (int j = 0; j < pipeNum; j++) {
+                close(fds[j][0]);
+                close(fds[j][1]);
+            }
+
             execvp(args[i][0], args[i]);
+            perror("execvp");
             _exit(1);
         }
     }
-    for (int i = 0; i < pipeNum-1; ++i) {
-        close(fds[i][0]);
-        close(fds[i][1]);
+
+    for (int j = 0; j < pipeNum; j++) {
+        close(fds[j][0]);
+        close(fds[j][1]);
     }
-    for (int i = 0; i < pipeNum; ++i) {
+    for (int i = 0; i <= pipeNum; i++) {
         wait(NULL);
     }
+
+    return 0;
 }
 
 //implement pwd(Print Working Directory)
