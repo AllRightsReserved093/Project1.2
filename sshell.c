@@ -52,7 +52,6 @@ int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
     return 1;
 }
 
-
 // Redirect output to file
 int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
 {
