@@ -10,6 +10,76 @@
 #define MAX_ARGS 16
 #define MAX_PIPE 3
 
+// Split Arguments
+// Input command line, and a int to receive err output
+// err = 0 if no error, err = 1 if too many arguments(skip printing complete message)
+char **sArgs(const char *cmdline, int *err) {
+    char *buf = strdup(cmdline);
+    char **args = malloc((MAX_ARGS + 2) * sizeof *args);
+
+    int i = 0;
+    char *tok = strtok(buf, " ");
+    while (tok) {
+        if (i >= MAX_ARGS) {
+            fprintf(stderr, "Error: too many arguments (max %d)\n", MAX_ARGS);
+            *err = 1;
+        }
+        args[i++] = tok;
+        tok = strtok(NULL, " ");
+    }
+    args[i] = NULL;
+    *err = 0;
+
+    return args;
+}
+
+// Split commands
+// Input full command line, and a int to store # of pipes
+char **splitCmds(const char *cmd, int *pipeNum) {
+    char *buf = strdup(cmd);
+    if (!buf) {
+        perror("strdup");
+        exit(255);
+    }
+
+    char **cmds = malloc((MAX_PIPE + 2) * sizeof *cmds);
+    if (!cmds) {
+        perror("malloc");
+        free(buf);
+        exit(255);
+    }
+
+    // split cmd
+    int count = 0;
+    char *saveptr = NULL;
+    char *seg = strtok_r(buf, "|", &saveptr);
+    while (seg) {
+        if (count >= MAX_PIPE + 1) {
+            fprintf(stderr, "Error: too many pipes (max %d)\n", MAX_PIPE);
+            fflush(stderr);
+            free(buf);
+            free(cmds);
+            exit(255);
+        }
+
+        // remove space
+        while (*seg == ' ' || *seg == '\t') seg++;
+        char *end = seg + strlen(seg) - 1;
+        while (end > seg && (*end == ' ' || *end == '\t' || *end == '\n'))
+            *end-- = '\0';
+
+        cmds[count++] = seg;
+        seg = strtok_r(NULL, "|", &saveptr);
+    }
+
+    // append NULL at the end
+    cmds[count] = NULL;
+    cmds[MAX_PIPE+1] = buf;
+
+    *pipeNum = (count > 0 ? count - 1 : 0);
+    return cmds;
+}
+
 // Redirect input to file
 int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
 {
@@ -279,16 +349,22 @@ int mySysPipe(const char *cmd){
     int pipeNum = 0;
     
     // get cmds
-    char **cmds = splitCmds(cmd, pipeNum);
+    char **cmds = splitCmds(cmd, &pipeNum);
 
     // get args
-    char **argv = sArgs(cmd, &errorCode);
+    char ***args = malloc(sizeof(cmd));
+    if (!args) {
+        perror("malloc args");
+        exit(1);
+    }
+    for(int i = 0; i <= pipeNum; i++){
+        args[i] = sArgs(cmd, &errorCode);
+    }
 
     // if it has more pipes than limit, return -1
     // return -2 for any other error
     int (*fds)[2] = malloc(sizeof(int[2]) * pipeNum);
     errorCode = createPipes(pipeNum, fds);
-
     
     int cmdN = 0;
     for(int i = 0; i < pipeNum; i++){
@@ -302,13 +378,9 @@ int mySysPipe(const char *cmd){
             close(fds[j][0]);
             close(fds[j][1]);
         }
-        if (fork() == 0) {     // 子进程：执行 cmd1
-            close(fds[i][0]);      // 关闭不需要的读端
-            close(fds[1]);
-            execvp(argv[i][0], argv[i]);
+        if (fork() == 0) { 
+            execvp(args[i][0], args[i]);
             _exit(1);
-            cmdN = i;
-            break;
         }
     }
     for (int i = 0; i < pipeNum-1; ++i) {
@@ -318,76 +390,6 @@ int mySysPipe(const char *cmd){
     for (int i = 0; i < pipeNum; ++i) {
         wait(NULL);
     }
-}
-
-// Split Arguments
-// Input command line, and a int to receive err output
-// err = 0 if no error, err = 1 if too many arguments(skip printing complete message)
-char **sArgs(const char *cmdline, int *err) {
-    char *buf = strdup(cmdline);
-    char **args = malloc((MAX_ARGS + 2) * sizeof *args);
-
-    int i = 0;
-    char *tok = strtok(buf, " ");
-    while (tok) {
-        if (i >= MAX_ARGS) {
-            fprintf(stderr, "Error: too many arguments (max %d)\n", MAX_ARGS);
-            *err = 1;
-        }
-        args[i++] = tok;
-        tok = strtok(NULL, " ");
-    }
-    args[i] = NULL;
-    *err = 0;
-
-    return args;
-}
-
-// Split commands
-// Input full command line, and a int to store # of pipes
-char **splitCmds(const char *cmd, int *pipeNum) {
-    char *buf = strdup(cmd);
-    if (!buf) {
-        perror("strdup");
-        exit(255);
-    }
-
-    char **cmds = malloc((MAX_PIPE + 2) * sizeof *cmds);
-    if (!cmds) {
-        perror("malloc");
-        free(buf);
-        exit(255);
-    }
-
-    // split cmd
-    int count = 0;
-    char *saveptr = NULL;
-    char *seg = strtok_r(buf, "|", &saveptr);
-    while (seg) {
-        if (count >= MAX_PIPE + 1) {
-            fprintf(stderr, "Error: too many pipes (max %d)\n", MAX_PIPE);
-            fflush(stderr);
-            free(buf);
-            free(cmds);
-            exit(255);
-        }
-
-        // remove space
-        while (*seg == ' ' || *seg == '\t') seg++;
-        char *end = seg + strlen(seg) - 1;
-        while (end > seg && (*end == ' ' || *end == '\t' || *end == '\n'))
-            *end-- = '\0';
-
-        cmds[count++] = seg;
-        seg = strtok_r(NULL, "|", &saveptr);
-    }
-
-    // append NULL at the end
-    cmds[count] = NULL;
-    cmds[MAX_PIPE+1] = buf;
-
-    *pipeNum = (count > 0 ? count - 1 : 0);
-    return cmds;
 }
 
 //implement pwd(Print Working Directory)
