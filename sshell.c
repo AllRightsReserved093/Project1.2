@@ -86,24 +86,33 @@ char **splitCmds(const char *cmd, int *pipeNum) {
 }
 
 // Search for command
-int searchCmd(char *cmdToken){
-    char fullpath[256];
-    char *path_env = getenv("PATH");
-    char *Ktoken = strtok(path_env, ":");
-    while (1) {
-        Ktoken = strtok(NULL, ":");
-        
-        // Combine path with token
-        snprintf(fullpath, sizeof(fullpath), "%s/%s", Ktoken, cmdToken);
-        
-        if (access(fullpath, X_OK) == 0){
-            break;
-        }
-        else if(Ktoken != NULL){
-            continue;
-        }
-        return -1;
+int comExist(const char *cmd) {
+    char *path = getenv("PATH");
+    if (!path) {
+        return 0;
     }
+
+    // 复制一份 PATH，避免 strtok 改写原环境变量
+    char *pathDup = strdup(path);
+    if (!pathDup) {
+        return 0;
+    }
+
+    char *dir = strtok(pathDup, ":");
+    while (dir) {
+        char fullPath[256];
+        // 拼接成 “目录/命令”
+        if (snprintf(fullPath, sizeof(fullPath), "%s/%s", dir, cmd) >= (int)sizeof(fullPath)) {
+            // 太长，跳过
+        } else if (access(fullPath, X_OK) == 0) {
+            // 可执行
+            free(pathDup);
+            return 1;
+        }
+        dir = strtok(NULL, ":");
+    }
+
+    free(pathDup);
     return 0;
 }
 
@@ -378,17 +387,10 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 }
 
 // implement syscall() with pipe
-int mySysPipe(const char *cmdLine, int *pipErr) {
+int mySysPipe(char *cmdLine, int *pipErr) {
     int pipeNum;
-    //
-    char *cmdLineCopy = cmdLine;
 
-    size_t len = strlen(cmdLine);
-    if (len && cmdLine[len-1] == '\n'){
-        cmdLineCopy[len-1] = '\0';
-    }
-    
-    char **cmds = splitCmds(cmdLineCopy, &pipeNum);  // pipeNum = “|” 的个数 
+    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数 
 
     char ***args = malloc((pipeNum+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
@@ -414,15 +416,19 @@ int mySysPipe(const char *cmdLine, int *pipErr) {
                 close(fds[j][0]);
                 close(fds[j][1]);
             }
-
-            int cmdNotExist = searchCmd(cmds[i]);
-            if(cmdNotExist){
+            
+            if(comExist(args[i][0]) == 0){
                 pipErr[i] = 255;
             }
             
-            printf("%s\n", args[i][0]);
+            printf("'%s'\n", args[i][0]);   // 注意加上引号！
             execvp(args[i][0], args[i]);
-            perror("execvp");
+            if(pipErr[i] = 255){
+                fprintf(stderr, "Error: command not found");
+                fflush(stderr);
+            }else{
+                perror("execvp");
+            }
             _exit(1);
         }
     }
