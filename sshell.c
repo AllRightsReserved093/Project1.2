@@ -390,7 +390,9 @@ int createPipes(int numPipes, int (*fds)[2]) {
 // implement syscall() with pipe
 int mySysPipe(char *cmdLine, int *pipeErr) {
     int numPipes;
-
+    int saved_stdin  = dup(STDIN_FILENO);
+    int saved_stdout = dup(STDOUT_FILENO);
+    
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
 
     char ***args = malloc((numPipes+1) * sizeof(char**));
@@ -405,8 +407,6 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
 
     int (*fds)[2] = malloc(numPipes * sizeof(int[2]));
     int err = createPipes(numPipes, fds);
-    int saved_stdin  = dup(STDIN_FILENO);
-    int saved_stdout = dup(STDOUT_FILENO);
     pid_t pids[numPipes];
     for (int i = 0; i <= numPipes; i++) {
         pid_t pid = fork();
@@ -647,7 +647,6 @@ int main(void){
             }
         }
         
-
         if(retval == 255){
             // Skip output complete message if retval = 255
         }
@@ -681,11 +680,12 @@ int main(void){
             for(int k = 0; k < numPipes; k++){
                 fprintf(stderr, "[%d]", pipeErr[k]);
             }
+            fprintf(stderr, "\n");
             fflush(stderr);
         }
 
         // Normal complete message;
-        if (retval != 255 && SKIP == 0)
+        if (retval != 255 && SKIP == 0 && numPipes == 0)
         {
             fprintf(stderr, "+ completed '%s' [%d]\n", original_cmd, retval);
             fflush(stderr);
