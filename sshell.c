@@ -426,8 +426,10 @@ int changeDirectory(const char *cmd){
         fflush(stderr);
         free(argv[MAX_ARGS+1]);
         free(argv);
+
         return -2;
     }
+    printf("%s\n", argv[1]);
 
     free(argv[MAX_ARGS+1]);
     free(argv);
@@ -435,8 +437,18 @@ int changeDirectory(const char *cmd){
     return 0;
 }
 
-int hasPipe(const char *s) {
-    return strchr(s, '|') != NULL;
+
+int numOfPipe(const char *cmd) {
+    size_t cnt = 0;
+    if(strchr(cmd, '|') != NULL){
+        for (size_t i = 0; cmd[i] != '\0'; i++) {
+            if (cmd[i] == "|") {
+                cnt++;
+            }
+        }
+        cnt++;
+    }
+    return cnt;
 }
 
 int main(void){
@@ -454,38 +466,41 @@ int main(void){
         /* Get command line */
         eof = fgets(cmd, CMDLINE_MAX, stdin);
 
-        if (!eof)
-            /* Make EOF equate to exit */
-            strncpy(cmd, "exit\n", CMDLINE_MAX);
+        // fold
+        if(1){
+            if (!eof)
+                /* Make EOF equate to exit */
+                strncpy(cmd, "exit\n", CMDLINE_MAX);
 
-        /* Print command line if stdin is not provided by terminal */
-        if (!isatty(STDIN_FILENO)) {
-            printf("%s", cmd);
-            fflush(stdout);
-        }
-
-        /* Remove trailing newline from command line */
-        nl = strchr(cmd, '\n');
-        if (nl){
-            *nl = '\0';
-        }
-
-        /* Builtin command */
-        if (!strcmp(cmd, "exit")) {
-
-            // If background job exists, cannot exit
-            if (bg_pid > 0)
-            {
-                fprintf(stderr, "Error: active job still running\n");
-                fflush(stderr);
-                continue;
+            /* Print command line if stdin is not provided by terminal */
+            if (!isatty(STDIN_FILENO)) {
+                printf("%s", cmd);
+                fflush(stdout);
             }
-            fprintf(stderr, "Bye...\n");
-            fprintf(stderr, "+ completed 'exit' [0]\n");
-            fflush(stderr);
-            break;
-        }
 
+            /* Remove trailing newline from command line */
+            nl = strchr(cmd, '\n');
+            if (nl){
+                *nl = '\0';
+            }
+
+            /* Builtin command */
+            if (!strcmp(cmd, "exit")) {
+
+                // If background job exists, cannot exit
+                if (bg_pid > 0)
+                {
+                    fprintf(stderr, "Error: active job still running\n");
+                    fflush(stderr);
+                    continue;
+                }
+                fprintf(stderr, "Bye...\n");
+                fprintf(stderr, "+ completed 'exit' [0]\n");
+                fflush(stderr);
+                break;
+            }
+        }
+        
         // Background job
         int backgroundJob = 0;
         size_t len = strlen(cmd);
@@ -525,9 +540,11 @@ int main(void){
 
         int pSkip = 1;
         // Pipe or no pipe
-        if(hasPipe(cmd)){
+        int pipes = numOfPipe(cmd);
+        if(pipes != 0){
             // With pipe
             retval = mySysPipe(cmd);
+
         }else{
             // Normal no pipe code
 
@@ -569,26 +586,26 @@ int main(void){
             // Skip output complete message if retval = 255
         }else{
             // Check for background job completion then print complete message
-            if (bg_pid > 0)
-            {
-                int status;
-                pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
-                if (bg_status > 0)
-                {
-                    int exit_code;
-                    if (WIFEXITED(status))
-                    {
-                        exit_code = WEXITSTATUS(status);
-                    }
-                    else
-                    {
-                        exit_code = 1;
-                    }
-                    fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
-                    bg_pid = -1;
-                    fflush(stderr);
-                }
-            }
+            // if (bg_pid > 0)
+            // {
+            //     int status;
+            //     pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
+            //     if (bg_status > 0)
+            //     {
+            //         int exit_code;
+            //         if (WIFEXITED(status))
+            //         {
+            //             exit_code = WEXITSTATUS(status);
+            //         }
+            //         else
+            //         {
+            //             exit_code = 1;
+            //         }
+            //         fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
+            //         bg_pid = -1;
+            //         fflush(stderr);
+            //     }
+            // }
             fprintf(stderr, "+ completed '%s' [%d]\n", cmd, retval);
             fflush(stderr);
         }
