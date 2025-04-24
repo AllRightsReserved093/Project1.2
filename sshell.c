@@ -133,6 +133,19 @@ int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
     strncpy(cmdOutput, cmdLine, cmdLength);
     cmdOutput[cmdLength] = '\0';
 
+    // Checking missing command
+    {    char *end = cmdOutput + cmdLength - 1;
+        while (end >= cmdOutput && isspace((unsigned char)*end)) {
+            *end-- = '\0';
+        }
+        
+        if (strlen(cmdOutput) == 0){
+            fprintf(stderr, "Error: missing command");
+            fflush(stderr);
+            return -1;
+        }
+    }
+
     // Reads file name
     redir++;
     while (*redir == ' ' || *redir == '\t')
@@ -173,7 +186,20 @@ int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
     // Copy command part to send to output file
     size_t cmdLength = redir - cmdLine;
     strncpy(cmdOutput, cmdLine, cmdLength);
-    cmdOutput[cmdLength] = '\0';
+    cmdOutput[cmdLength] = '\0'; 
+    
+    // Checking missing command
+    {    char *end = cmdOutput + cmdLength - 1;
+        while (end >= cmdOutput && isspace((unsigned char)*end)) {
+            *end-- = '\0';
+        }
+        
+        if (strlen(cmdOutput) == 0){
+            fprintf(stderr, "Error: missing command");
+            fflush(stderr);
+            return -1;
+        }
+    }
 
     // Reads file name
     redir++;
@@ -213,6 +239,7 @@ int mySystem(const char *cmdLine){
     char cmdParsed2[CMDLINE_MAX]; // includes only cmd and output command after removing input
     char fileOutput[CMDLINE_MAX];
     char fileInput[CMDLINE_MAX];
+
 
     int inputRedirect = inputRedirection(cmdLine, cmdParsed2, fileInput);
     int outputRedirect = outputRedirection(cmdParsed2, cmdParsed, fileOutput);
@@ -600,12 +627,12 @@ int main(void){
             continue;
         }
 
+
         int SKIP = 0;
         int cdErr = 0;
         int numPipes = numOfPipes(cmd);
         int pipeErr[numPipes + 1];
         memset(pipeErr, 0, sizeof(pipeErr));
-        
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
