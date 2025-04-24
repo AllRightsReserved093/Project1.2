@@ -653,7 +653,7 @@ int main(void){
         }
 
         // Check for background job completion then print complete message
-        if (bg_pid > 0)
+        if (bg_pid > 0 && SKIP == 0)
         {
             int status;
             pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
@@ -685,7 +685,7 @@ int main(void){
         }
 
         // Normal complete message;
-        if (retval != 255)
+        if (retval != 255 && SKIP == 0)
         {
             fprintf(stderr, "+ completed '%s' [%d]\n", original_cmd, retval);
             fflush(stderr);
