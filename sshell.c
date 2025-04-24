@@ -378,9 +378,16 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 }
 
 // implement syscall() with pipe
-int *mySysPipe(const char *cmdLine, int *pipErr) {
+int mySysPipe(const char *cmdLine, int *pipErr) {
     int pipeNum;
-    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数 
+    char *cmdLineCopy = cmdLine;
+
+    size_t len = strlen(cmdLine);
+    if (len && cmdLine[len-1] == '\n'){
+        cmdLineCopy[len-1] = '\0';
+    }
+    
+    char **cmds = splitCmds(cmdLineCopy, &pipeNum);  // pipeNum = “|” 的个数 
 
     char ***args = malloc((pipeNum+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
@@ -411,7 +418,8 @@ int *mySysPipe(const char *cmdLine, int *pipErr) {
             if(cmdNotExist){
                 pipErr[i] = 255;
             }
-
+            
+            printf("%s\n", args[i][0]);
             execvp(args[i][0], args[i]);
             perror("execvp");
             _exit(1);
@@ -572,7 +580,7 @@ int main(void){
         if(numPipes != 0){
             // With pipe
             int pipErr[numPipes + 1];
-            mySysPipe(cmd, &pipErr);
+            mySysPipe(cmd, pipErr);
 
         }else{
             // Normal no pipe code
