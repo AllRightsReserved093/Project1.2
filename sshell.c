@@ -307,6 +307,12 @@ int mislocatedRedirection(const char *cmd)
     char **cmds = splitCmds(cmd, &pipeNum);
     const char *outputMisRedirect = strchr(cmd, '>');
     const char *pipe = strchr(cmd, '|');
+    const char *backgroundSign = strchr(cmd, '&');
+
+    if (backgroundSign && (outputMisRedirect || pipe))
+    {
+        return 3;
+    }
 
     // input error handling
     for (int i = 1; i <= pipeNum; i++)
@@ -426,10 +432,8 @@ int changeDirectory(const char *cmd){
         fflush(stderr);
         free(argv[MAX_ARGS+1]);
         free(argv);
-
         return -2;
     }
-    printf("%s\n", argv[1]);
 
     free(argv[MAX_ARGS+1]);
     free(argv);
@@ -437,8 +441,8 @@ int changeDirectory(const char *cmd){
     return 0;
 }
 
-
-int numOfPipe(const char *cmd) {
+// get number of pipes.
+int numOfPipes(const char *cmd) {
     size_t cnt = 0;
     if(strchr(cmd, '|') != NULL){
         for (size_t i = 0; cmd[i] != '\0'; i++) {
@@ -466,54 +470,46 @@ int main(void){
         /* Get command line */
         eof = fgets(cmd, CMDLINE_MAX, stdin);
 
-        // fold
-        if(1){
-            if (!eof)
-                /* Make EOF equate to exit */
-                strncpy(cmd, "exit\n", CMDLINE_MAX);
+        if (!eof)
+            /* Make EOF equate to exit */
+            strncpy(cmd, "exit\n", CMDLINE_MAX);
 
-            /* Print command line if stdin is not provided by terminal */
-            if (!isatty(STDIN_FILENO)) {
-                printf("%s", cmd);
-                fflush(stdout);
-            }
-
-            /* Remove trailing newline from command line */
-            nl = strchr(cmd, '\n');
-            if (nl){
-                *nl = '\0';
-            }
-
-            /* Builtin command */
-            if (!strcmp(cmd, "exit")) {
-
-                // If background job exists, cannot exit
-                if (bg_pid > 0)
-                {
-                    fprintf(stderr, "Error: active job still running\n");
-                    fflush(stderr);
-                    continue;
-                }
-                fprintf(stderr, "Bye...\n");
-                fprintf(stderr, "+ completed 'exit' [0]\n");
-                fflush(stderr);
-                break;
-            }
+        /* Print command line if stdin is not provided by terminal */
+        if (!isatty(STDIN_FILENO)) {
+            printf("%s", cmd);
+            fflush(stdout);
         }
-        
-        // Background job
-        int backgroundJob = 0;
-        size_t len = strlen(cmd);
-        if (len > 0 && cmd[len - 1] == '&')
-        {
-            backgroundJob = 1;
 
-            if (strchr(cmd, '|') || strchr(cmd, '<') || strchr(cmd, '>'))
+        /* Remove trailing newline from command line */
+        nl = strchr(cmd, '\n');
+        if (nl){
+            *nl = '\0';
+        }
+
+        /* Builtin command */
+        if (!strcmp(cmd, "exit")) {
+
+            // If background job exists, cannot exit
+            if (bg_pid > 0)
             {
-                fprintf(stderr, "Error: mislocated background sign\n");
+                fprintf(stderr, "Error: active job still running\n");
                 fflush(stderr);
                 continue;
             }
+            fprintf(stderr, "Bye...\n");
+            fprintf(stderr, "+ completed 'exit' [0]\n");
+            fflush(stderr);
+            break;
+        }
+
+        // Background job
+        int backgroundJob = 0;
+        size_t len = strlen(cmd);
+        char original_cmd[CMDLINE_MAX];
+        strncpy(original_cmd, cmd, CMDLINE_MAX);
+        if (len > 0 && cmd[len - 1] == '&')
+        {
+            backgroundJob = 1;
 
             cmd[--len] = '\0';
             while (len > 0 && isspace((unsigned char)cmd[len - 1]))
@@ -534,17 +530,20 @@ int main(void){
             {
                 fprintf(stderr, "Error: mislocated output redirection\n");
             }
+            else if (misRedirError == 3)
+            {
+                fprintf(stderr, "Error: mislocated background sign\n");
+            }
             fflush(stderr);
             continue;
         }
 
         int pSkip = 1;
+        int numPipes = numOfPipes(cmd);
         // Pipe or no pipe
-        int pipes = numOfPipe(cmd);
-        if(pipes != 0){
+        if(numPipes != 0){
             // With pipe
             retval = mySysPipe(cmd);
-
         }else{
             // Normal no pipe code
 
@@ -570,7 +569,7 @@ int main(void){
                     else
                     {
                         bg_pid = pid;
-                        strncpy(bg_cmd, cmd, sizeof(bg_cmd));
+                        strncpy(bg_cmd, original_cmd, sizeof(bg_cmd));
                         continue;
                     }
                 }
@@ -584,38 +583,34 @@ int main(void){
 
         if(retval == 255 || pSkip == -1){
             // Skip output complete message if retval = 255
-        }else{
-            // Check for background job completion then print complete message
-            // if (bg_pid > 0)
-            // {
-            //     int status;
-            //     pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
-            //     if (bg_status > 0)
-            //     {
-            //         int exit_code;
-            //         if (WIFEXITED(status))
-            //         {
-            //             exit_code = WEXITSTATUS(status);
-            //         }
-            //         else
-            //         {
-            //             exit_code = 1;
-            //         }
-            //         fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
-            //         bg_pid = -1;
-            //         fflush(stderr);
-            //     }
-            // }
-            fprintf(stderr, "+ completed '%s' [%d]\n", cmd, retval);
+        }
+        // Check for background job completion then print complete message
+        if (bg_pid > 0)
+        {
+            int status;
+            pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
+            if (bg_status > 0)
+            {
+                int exit_code;
+                if (WIFEXITED(status))
+                {
+                    exit_code = WEXITSTATUS(status);
+                }
+                else
+                {
+                    exit_code = 1;
+                }
+
+                fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
+                bg_pid = -1;
+                flush(stderr);
+            }
+        }
+        
+        if (retval != 255 && pSkip != -1)
+        {
+            fprintf(stderr, "+ completed '%s' [%d]\n", original_cmd, retval);
             fflush(stderr);
         }
     }
 }
-
-/*
-Errors:
-1)"Error: mislocated background sign" doesn't work
-2) sleep message wrong
-+ completed 'sleep 1&' [0]
-instead of + completed 'sleep 1' [0] (NO ampersand symbol)
-*/
