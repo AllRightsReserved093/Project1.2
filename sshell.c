@@ -86,7 +86,7 @@ char **splitCmds(const char *cmd, int *pipeNum) {
 }
 
 // Search for command
-int searchCmd(cmdToken){
+int searchCmd(char *cmdToken){
     char fullpath[256];
     char *path_env = getenv("PATH");
     char *Ktoken = strtok(path_env, ":");
@@ -104,7 +104,7 @@ int searchCmd(cmdToken){
         }
         return -1;
     }
-    return 0
+    return 0;
 }
 
 // Redirect input to file
@@ -298,7 +298,6 @@ int mySystem(const char *cmdLine){
             exit(255);
         }
         
-        
         if (execv(fullpath, args) == -1) {
             
             if (errno == ENOENT) {
@@ -379,25 +378,18 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 }
 
 // implement syscall() with pipe
-int mySysPipe(const char *cmdLine) {
+int *mySysPipe(const char *cmdLine, int *pipErr) {
     int pipeNum;
-    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数
-
-    for(int i = 0; i <= pipeNum; i++){
-        int cmdNotExist = searchCmd(cmds[i]);
-        if(cmdNotExist){
-            fprintf(stderr, "Error: command not found\n");
-            fflush(stderr);
-            return 255;
-        }
-    }
+    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数 
 
     char ***args = malloc((pipeNum+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
     for (int i = 0; i <= pipeNum; i++) {
-        int err;
+        int err = 0;
         args[i] = sArgs(cmds[i], &err);
-        if (err) {return -1;} // too many arguments, return -1, no complete message
+        if (err) {
+            return 255;
+        } // too many arguments, return -1, no complete message
     }
 
     int (*fds)[2] = malloc(pipeNum * sizeof(int[2]));
@@ -413,6 +405,11 @@ int mySysPipe(const char *cmdLine) {
             for (int j = 0; j < pipeNum; j++) {
                 close(fds[j][0]);
                 close(fds[j][1]);
+            }
+
+            int cmdNotExist = searchCmd(cmds[i]);
+            if(cmdNotExist){
+                pipErr[i] = 255;
             }
 
             execvp(args[i][0], args[i]);
@@ -574,7 +571,9 @@ int main(void){
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
-            retval = mySysPipe(cmd);
+            int pipErr[numPipes + 1];
+            mySysPipe(cmd, &pipErr);
+
         }else{
             // Normal no pipe code
 
@@ -638,7 +637,7 @@ int main(void){
 
                 fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
                 bg_pid = -1;
-                flush(stderr);
+                fflush(stderr);
             }
         }
         
