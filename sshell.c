@@ -85,6 +85,28 @@ char **splitCmds(const char *cmd, int *pipeNum) {
     return cmds;
 }
 
+// Search for command
+int searchCmd(cmdToken){
+    char fullpath[256];
+    char *path_env = getenv("PATH");
+    char *Ktoken = strtok(path_env, ":");
+    while (1) {
+        Ktoken = strtok(NULL, ":");
+        
+        // Combine path with token
+        snprintf(fullpath, sizeof(fullpath), "%s/%s", Ktoken, cmdToken);
+        
+        if (access(fullpath, X_OK) == 0){
+            break;
+        }
+        else if(Ktoken != NULL){
+            continue;
+        }
+        return -1;
+    }
+    return 0
+}
+
 // Redirect input to file
 int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
 {
@@ -361,12 +383,21 @@ int mySysPipe(const char *cmdLine) {
     int pipeNum;
     char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数
 
+    for(int i = 0; i <= pipeNum; i++){
+        int cmdNotExist = searchCmd(cmds[i]);
+        if(cmdNotExist){
+            fprintf(stderr, "Error: command not found\n");
+            fflush(stderr);
+            return 255;
+        }
+    }
+
     char ***args = malloc((pipeNum+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
     for (int i = 0; i <= pipeNum; i++) {
         int err;
         args[i] = sArgs(cmds[i], &err);
-        if (err) { }
+        if (err) {return -1;} // too many arguments, return -1, no complete message
     }
 
     int (*fds)[2] = malloc(pipeNum * sizeof(int[2]));
@@ -580,6 +611,9 @@ int main(void){
             }
         }
         
+        if(numPipes != 0){
+
+        }
 
         if(retval == 255 || pSkip == -1){
             // Skip output complete message if retval = 255
