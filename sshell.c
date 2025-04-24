@@ -405,8 +405,9 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
 
     int (*fds)[2] = malloc(numPipes * sizeof(int[2]));
     int err = createPipes(numPipes, fds);
+    int saved_stdin  = dup(STDIN_FILENO);
+    int saved_stdout = dup(STDOUT_FILENO);
     pid_t pids[numPipes];
-
     for (int i = 0; i <= numPipes; i++) {
         pid_t pid = fork();
         if (pid < 0) { perror("fork"); exit(1); }
@@ -450,7 +451,12 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
             }
         }
     }
-
+    dup2(saved_stdin,  STDIN_FILENO);
+    dup2(saved_stdout, STDOUT_FILENO);
+    close(saved_stdin);
+    close(saved_stdout);
+    fflush(stdout);
+    fflush(stdin);
     return 0;
 }
 
