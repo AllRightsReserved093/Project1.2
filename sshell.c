@@ -442,8 +442,8 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
     int status[numPipes];
     int ec = 0;
     for (int i = 0; i <= numPipes; i++) {
-        waitpid(pids[i], &status, 0);
-        if(pipeErr != 255){
+        waitpid(pids[i], &status[i], 0);
+        if(pipeErr[i] != 255){
             ec = WIFEXITED(status[i]);
             if(ec){
                 pipeErr[i] = WEXITSTATUS(status[i]);
@@ -599,6 +599,7 @@ int main(void){
         int cdErr = 0;
         int numPipes = numOfPipes(cmd);
         int pipeErr[numPipes + 1];
+        memset(pipeErr, 0, sizeof(pipeErr));
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
@@ -672,7 +673,7 @@ int main(void){
         if(numPipes != 0){
             fprintf(stderr, "+ completed '%s'", original_cmd);
             for(int k = 0; k < numPipes; k++){
-                fprintf(stderr, "[%s]", pipeErr[k]);
+                fprintf(stderr, "[%d]", pipeErr[k]);
             }
             fflush(stderr);
         }
