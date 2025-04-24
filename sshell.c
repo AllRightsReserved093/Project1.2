@@ -380,6 +380,7 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 // implement syscall() with pipe
 int mySysPipe(const char *cmdLine, int *pipErr) {
     int pipeNum;
+    //
     char *cmdLineCopy = cmdLine;
 
     size_t len = strlen(cmdLine);
