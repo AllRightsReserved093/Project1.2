@@ -418,11 +418,11 @@ int createPipes(int numPipes, int (*fds)[2]) {
 
 // implement syscall() with pipe
 int mySysPipe(char *cmdLine, int *pipeErr) {
-    int numPipes;
+    int numPipes = 1;
 
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
 
-    for(int i = 0; i <= numPipes; i++){
+    for(int i = 0; i <= numOfPipes(cmdLine); i++){
         if(strlen(cmds[i]) == 0){
             fprintf(stderr, "Error: missing command");
             fflush(stderr);
