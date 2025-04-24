@@ -562,13 +562,13 @@ int main(void){
                 if (backgroundJob)
                 {
                     pid_t pid = fork();
-                    if (pid == 0)
+                    if (pid == 0) // child
                     {
                         exit(mySystem(cmd));
                     }
-                    else
+                    else // parent
                     {
-                        bg_pid = pid;
+                        bg_pid = pid; // bg_pid > 0 only if backgroundJob parent
                         strncpy(bg_cmd, original_cmd, sizeof(bg_cmd));
                         continue;
                     }
@@ -584,28 +584,29 @@ int main(void){
         if(retval == 255 || pSkip == -1){
             // Skip output complete message if retval = 255
         }
-        // Check for background job completion then print complete message
-        if (bg_pid > 0)
-        {
-            int status;
-            pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
-            if (bg_status > 0)
-            {
-                int exit_code;
-                if (WIFEXITED(status))
-                {
-                    exit_code = WEXITSTATUS(status);
-                }
-                else
-                {
-                    exit_code = 1;
-                }
 
-                fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
-                bg_pid = -1;
-                flush(stderr);
-            }
-        }
+        // // Check for background job completion then print complete message
+        // if (bg_pid > 0)
+        // {
+        //     int status;
+        //     pid_t bg_status = waitpid(bg_pid, &status, WNOHANG);
+        //     if (bg_status > 0)
+        //     {
+        //         int exit_code;
+        //         if (WIFEXITED(status))
+        //         {
+        //             exit_code = WEXITSTATUS(status);
+        //         }
+        //         else
+        //         {
+        //             exit_code = 1;
+        //         }
+
+        //         fprintf(stderr, "+ completed '%s' [%d]\n", bg_cmd, exit_code);
+        //         bg_pid = -1;
+        //         flush(stderr);
+        //     }
+        // }
         
         if (retval != 255 && pSkip != -1)
         {
