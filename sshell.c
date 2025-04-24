@@ -140,9 +140,9 @@ int inputRedirection(const char *cmdLine, char *cmdOutput, char *fileInput)
         }
         
         if (strlen(cmdOutput) == 0){
-            fprintf(stderr, "Error: missing command");
+            fprintf(stderr, "Error: missing command\n");
             fflush(stderr);
-            return -1;
+            return 255;
         }
     }
 
@@ -197,7 +197,7 @@ int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
         if (strlen(cmdOutput) == 0){
             fprintf(stderr, "Error: missing command");
             fflush(stderr);
-            return -1;
+            return 255;
         }
     }
 
@@ -243,6 +243,8 @@ int mySystem(const char *cmdLine){
 
     int inputRedirect = inputRedirection(cmdLine, cmdParsed2, fileInput);
     int outputRedirect = outputRedirection(cmdParsed2, cmdParsed, fileOutput);
+    // If missing command, return 255, no complete message
+    if(inputRedirect == 255 || outputRedirect == 255){return 255;}
 
     // To handle printing error messages twice
     if (inputRedirect == -1 || outputRedirect == -1)
@@ -419,6 +421,14 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
     int numPipes;
 
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
+
+    for(int i = 0; i <= numPipes; i++){
+        if(strlen(cmds[i]) == 0){
+            fprintf(stderr, "Error: missing command");
+            fflush(stderr);
+            return 255;
+        }
+    }
 
     char ***args = malloc((numPipes+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
