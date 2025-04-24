@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <stdio_ext.h>
 
 #define CMDLINE_MAX 512
 #define MAX_ARGS 16
@@ -417,14 +418,14 @@ int mySysPipe(char *cmdLine, int *pipErr) {
                 close(fds[j][1]);
             }
             
-            if(comExist(args[i][0]) == 0){
+            if(comExist(args[i][0]) == 0  || 1){
                 pipErr[i] = 255;
             }
             
-            printf("'%s'\n", args[i][0]);   // 注意加上引号！
             execvp(args[i][0], args[i]);
+            
             if(pipErr[i] = 255){
-                fprintf(stderr, "Error: command not found");
+                fprintf(stderr, "Error: command not found\n");
                 fflush(stderr);
             }else{
                 perror("execvp");
@@ -432,7 +433,6 @@ int mySysPipe(char *cmdLine, int *pipErr) {
             _exit(1);
         }
     }
-
     for (int j = 0; j < pipeNum; j++) {
         close(fds[j][0]);
         close(fds[j][1]);
