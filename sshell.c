@@ -390,9 +390,7 @@ int createPipes(int numPipes, int (*fds)[2]) {
 // implement syscall() with pipe
 int mySysPipe(char *cmdLine, int *pipeErr) {
     int numPipes;
-    int saved_stdin  = dup(STDIN_FILENO);
-    int saved_stdout = dup(STDOUT_FILENO);
-    
+
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
 
     char ***args = malloc((numPipes+1) * sizeof(char**));
@@ -401,13 +399,13 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
         int err = 0;
         args[i] = sArgs(cmds[i], &err);
         if (err) {
-            return 255;
+            return -1;
         } // too many arguments, return -1, no complete message
     }
 
     int (*fds)[2] = malloc(numPipes * sizeof(int[2]));
     int err = createPipes(numPipes, fds);
-    pid_t pids[numPipes];
+    pid_t pids[numPipes + 1];
     for (int i = 0; i <= numPipes; i++) {
         pid_t pid = fork();
         if (pid < 0) { perror("fork"); exit(1); }
@@ -420,17 +418,18 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
                 close(fds[j][1]);
             }
             
-            if(comExist(args[i][0]) == 0  || 1){
+            if(comExist(args[i][0]) == 0){
                 pipeErr[i] = 255;
             }
             
             execvp(args[i][0], args[i]);
             
-            if(pipeErr[i] = 255){
+            if(pipeErr[i] == 255){
                 fprintf(stderr, "Error: command not found\n");
                 fflush(stderr);
+                _exit(255);
             }else{
-                exit(errno);
+                _exit(errno);
             }
         }else{ // parent
             pids[i] = pid;
@@ -440,21 +439,21 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
         close(fds[j][0]);
         close(fds[j][1]);
     }
-    int status[numPipes];
+    int status[numPipes + 1];
     int ec = 0;
     for (int i = 0; i <= numPipes; i++) {
         waitpid(pids[i], &status[i], 0);
-        if(pipeErr[i] != 255){
+        if(pipeErr[i] != 255 && status[i] != 255){
             ec = WIFEXITED(status[i]);
             if(ec){
                 pipeErr[i] = WEXITSTATUS(status[i]);
             }
         }
     }
-    dup2(saved_stdin,  STDIN_FILENO);
-    dup2(saved_stdout, STDOUT_FILENO);
-    close(saved_stdin);
-    close(saved_stdout);
+    
+    
+    dup2(0,  STDIN_FILENO);
+    dup2(1, STDOUT_FILENO);
     fflush(stdout);
     fflush(stdin);
     return 0;
@@ -606,10 +605,10 @@ int main(void){
         int numPipes = numOfPipes(cmd);
         int pipeErr[numPipes + 1];
         memset(pipeErr, 0, sizeof(pipeErr));
+        
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
-            
             mySysPipe(cmd, pipeErr);
         }else{
             // Normal no pipe code
