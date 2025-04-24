@@ -41,7 +41,7 @@ char **sArgs(const char *cmdline, int *err) {
 
 // Split commands
 // Input full command line, and a int to store # of pipes
-char **splitCmds(const char *cmd, int *pipeNum) {
+char **splitCmds(const char *cmd, int *numPipes) {
     char *buf = strdup(cmd);
     if (!buf) {
         perror("strdup");
@@ -82,7 +82,7 @@ char **splitCmds(const char *cmd, int *pipeNum) {
     cmds[count] = NULL;
     cmds[MAX_PIPE+1] = buf;
 
-    *pipeNum = (count > 0 ? count - 1 : 0);
+    *numPipes = (count > 0 ? count - 1 : 0);
     return cmds;
 }
 
@@ -334,8 +334,8 @@ int mySystem(const char *cmdLine){
 
 int mislocatedRedirection(const char *cmd)
 {
-    int pipeNum;
-    char **cmds = splitCmds(cmd, &pipeNum);
+    int numPipes;
+    char **cmds = splitCmds(cmd, &numPipes);
     const char *outputMisRedirect = strchr(cmd, '>');
     const char *pipe = strchr(cmd, '|');
     const char *backgroundSign = strchr(cmd, '&');
@@ -346,7 +346,7 @@ int mislocatedRedirection(const char *cmd)
     }
 
     // input error handling
-    for (int i = 1; i <= pipeNum; i++)
+    for (int i = 1; i <= numPipes; i++)
     {
         if (strchr(cmds[i], '<'))
         {
@@ -363,16 +363,16 @@ int mislocatedRedirection(const char *cmd)
     return 0; 
 }
 
-// create pipeNum of pipes
-int createPipes(int pipeNum, int (*fds)[2]) {
+// create numPipes of pipes
+int createPipes(int numPipes, int (*fds)[2]) {
     // check if too many pipes
-    if (pipeNum > MAX_PIPE) {
+    if (numPipes > MAX_PIPE) {
         fprintf(stderr, "超过最大管道数 %d\n", MAX_PIPE);
         return -1;
     }
 
     // create pipes
-    for (int i = 0; i < pipeNum; ++i) {
+    for (int i = 0; i < numPipes; ++i) {
         if (pipe(fds[i]) == -1) {
             perror("pipe");
             // close all pipes if error
@@ -388,14 +388,14 @@ int createPipes(int pipeNum, int (*fds)[2]) {
 }
 
 // implement syscall() with pipe
-int mySysPipe(char *cmdLine, int *pipErr) {
-    int pipeNum;
+int mySysPipe(char *cmdLine, int *pipeErr) {
+    int numPipes;
 
-    char **cmds = splitCmds(cmdLine, &pipeNum);  // pipeNum = “|” 的个数 
+    char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
 
-    char ***args = malloc((pipeNum+1) * sizeof(char**));
+    char ***args = malloc((numPipes+1) * sizeof(char**));
     if (!args) { perror("malloc args"); return -1; }
-    for (int i = 0; i <= pipeNum; i++) {
+    for (int i = 0; i <= numPipes; i++) {
         int err = 0;
         args[i] = sArgs(cmds[i], &err);
         if (err) {
@@ -403,42 +403,52 @@ int mySysPipe(char *cmdLine, int *pipErr) {
         } // too many arguments, return -1, no complete message
     }
 
-    int (*fds)[2] = malloc(pipeNum * sizeof(int[2]));
-    int err = createPipes(pipeNum, fds);
+    int (*fds)[2] = malloc(numPipes * sizeof(int[2]));
+    int err = createPipes(numPipes, fds);
+    pid_t pids[numPipes];
 
-    for (int i = 0; i <= pipeNum; i++) {
+    for (int i = 0; i <= numPipes; i++) {
         pid_t pid = fork();
         if (pid < 0) { perror("fork"); exit(1); }
-        if (pid == 0) {
+        if (pid == 0) { // child
             if (i > 0)              dup2(fds[i-1][0], STDIN_FILENO);
-            if (i < pipeNum)        dup2(fds[i][1], STDOUT_FILENO);
+            if (i < numPipes)        dup2(fds[i][1], STDOUT_FILENO);
 
-            for (int j = 0; j < pipeNum; j++) {
+            for (int j = 0; j < numPipes; j++) {
                 close(fds[j][0]);
                 close(fds[j][1]);
             }
             
             if(comExist(args[i][0]) == 0  || 1){
-                pipErr[i] = 255;
+                pipeErr[i] = 255;
             }
             
             execvp(args[i][0], args[i]);
             
-            if(pipErr[i] = 255){
+            if(pipeErr[i] = 255){
                 fprintf(stderr, "Error: command not found\n");
                 fflush(stderr);
             }else{
-                perror("execvp");
+                exit(errno);
             }
-            _exit(1);
+        }else{ // parent
+            pids[i] = pid;
         }
     }
-    for (int j = 0; j < pipeNum; j++) {
+    for (int j = 0; j < numPipes; j++) {
         close(fds[j][0]);
         close(fds[j][1]);
     }
-    for (int i = 0; i <= pipeNum; i++) {
-        wait(NULL);
+    int status[numPipes];
+    int ec = 0;
+    for (int i = 0; i <= numPipes; i++) {
+        waitpid(pids[i], &status, 0);
+        if(pipeErr != 255){
+            ec = WIFEXITED(status[i]);
+            if(ec){
+                pipeErr[i] = WEXITSTATUS(status[i]);
+            }
+        }
     }
 
     return 0;
@@ -513,36 +523,40 @@ int main(void){
         /* Get command line */
         eof = fgets(cmd, CMDLINE_MAX, stdin);
 
-        if (!eof)
-            /* Make EOF equate to exit */
-            strncpy(cmd, "exit\n", CMDLINE_MAX);
+        // fold
+        {
+            if (!eof)
+                /* Make EOF equate to exit */
+                strncpy(cmd, "exit\n", CMDLINE_MAX);
 
-        /* Print command line if stdin is not provided by terminal */
-        if (!isatty(STDIN_FILENO)) {
-            printf("%s", cmd);
-            fflush(stdout);
-        }
-
-        /* Remove trailing newline from command line */
-        nl = strchr(cmd, '\n');
-        if (nl){
-            *nl = '\0';
-        }
-
-        /* Builtin command */
-        if (!strcmp(cmd, "exit")) {
-
-            // If background job exists, cannot exit
-            if (bg_pid > 0)
-            {
-                fprintf(stderr, "Error: active job still running\n");
-                fflush(stderr);
-                continue;
+            /* Print command line if stdin is not provided by terminal */
+            if (!isatty(STDIN_FILENO)) {
+                printf("%s", cmd);
+                fflush(stdout);
             }
-            fprintf(stderr, "Bye...\n");
-            fprintf(stderr, "+ completed 'exit' [0]\n");
-            fflush(stderr);
-            break;
+
+            /* Remove trailing newline from command line */
+            nl = strchr(cmd, '\n');
+            if (nl){
+                *nl = '\0';
+            }
+
+            /* Builtin command */
+            if (!strcmp(cmd, "exit")) {
+
+                // If background job exists, cannot exit
+                if (bg_pid > 0)
+                {
+                    fprintf(stderr, "Error: active job still running\n");
+                    fflush(stderr);
+                    continue;
+                }
+                fprintf(stderr, "Bye...\n");
+                fprintf(stderr, "+ completed 'exit' [0]\n");
+                fflush(stderr);
+                break;
+            }
+
         }
 
         // Background job
@@ -581,29 +595,30 @@ int main(void){
             continue;
         }
 
-        int pSkip = 1;
+        int SKIP = 0;
+        int cdErr = 0;
         int numPipes = numOfPipes(cmd);
+        int pipeErr[numPipes + 1];
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
-            int pipErr[numPipes + 1];
-            mySysPipe(cmd, pipErr);
-
+            
+            mySysPipe(cmd, pipeErr);
         }else{
             // Normal no pipe code
 
             //pwd
             if(!strcmp(cmd, "pwd")){
                 printWorkingDirectory();
-                pSkip = 0;
+                SKIP = 1;
             }
             //cd
             if(!strncmp(cmd, "cd", 2)){
-                pSkip = changeDirectory(cmd);
+                cdErr = changeDirectory(cmd);
             }
             /* Regular command */
-            // skip systemCall if pSkip = 1
-            if(pSkip == 1){
+            // skip systemCall if SKIP = 1
+            if(SKIP == 0){
                 if (backgroundJob)
                 {
                     pid_t pid = fork();
@@ -625,11 +640,8 @@ int main(void){
             }
         }
         
-        if(numPipes != 0){
 
-        }
-
-        if(retval == 255 || pSkip == -1){
+        if(retval == 255){
             // Skip output complete message if retval = 255
         }
 
@@ -656,7 +668,17 @@ int main(void){
             }
         }
         
-        if (retval != 255 && pSkip != -1)
+        // Pipe complete message
+        if(numPipes != 0){
+            fprintf(stderr, "+ completed '%s'", original_cmd);
+            for(int k = 0; k < numPipes; k++){
+                fprintf(stderr, "[%s]", pipeErr[k]);
+            }
+            fflush(stderr);
+        }
+
+        // Normal complete message;
+        if (retval != 255)
         {
             fprintf(stderr, "+ completed '%s' [%d]\n", original_cmd, retval);
             fflush(stderr);
