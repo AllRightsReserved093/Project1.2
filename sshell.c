@@ -446,7 +446,7 @@ int numOfPipes(const char *cmd) {
     size_t cnt = 0;
     if(strchr(cmd, '|') != NULL){
         for (size_t i = 0; cmd[i] != '\0'; i++) {
-            if (cmd[i] == "|") {
+            if (cmd[i] == '|') {
                 cnt++;
             }
         }
@@ -562,13 +562,13 @@ int main(void){
                 if (backgroundJob)
                 {
                     pid_t pid = fork();
-                    if (pid == 0)
+                    if (pid == 0) // child
                     {
                         exit(mySystem(cmd));
                     }
-                    else
+                    else // parent
                     {
-                        bg_pid = pid;
+                        bg_pid = pid; // bg_pid > 0 only if backgroundJob parent
                         strncpy(bg_cmd, original_cmd, sizeof(bg_cmd));
                         continue;
                     }
@@ -584,6 +584,7 @@ int main(void){
         if(retval == 255 || pSkip == -1){
             // Skip output complete message if retval = 255
         }
+
         // Check for background job completion then print complete message
         if (bg_pid > 0)
         {
