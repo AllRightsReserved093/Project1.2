@@ -17,7 +17,7 @@ pid_t bg_pid = -1;
 char bg_cmd[CMDLINE_MAX];
 
 // get number of pipes.
-int numOfPipes(const char *cmd) {
+int numOfPipeCmd(const char *cmd) {
     size_t cnt = 0;
     if(strchr(cmd, '|') != NULL){
         for (size_t i = 0; cmd[i] != '\0'; i++) {
@@ -427,9 +427,15 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
     int numPipes = 1;
 
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
-
-    for(int i = 0; i <= numOfPipes(cmdLine); i++){
-        if(cmds[0] == NULL || strlen(cmds[i]) == 0){
+    numPipes = numOfPipeCmd(cmdLine) - 1;
+    if (cmds[0] == NULL) {
+        fprintf(stderr, "Error: missing command\n");
+        fflush(stderr);
+        return 255;
+    }
+    
+    for (int i = 0; i <= numPipes; i++) {
+        if (cmds[i] == NULL || cmds[i][0] == '\0' ) {
             fprintf(stderr, "Error: missing command\n");
             fflush(stderr);
             return 255;
@@ -633,13 +639,13 @@ int main(void){
         int SKIP = 0;
         int cdPwdComplete = 0;
         int cdErr = 0;
-        int numPipes = numOfPipes(cmd);
+        int numPipes = numOfPipeCmd(cmd);
         int pipeErr[numPipes + 1];
         memset(pipeErr, 0, sizeof(pipeErr));
         // Pipe or no pipe
         if(numPipes != 0){
             // With pipe
-            mySysPipe(cmd, pipeErr);
+            retval = mySysPipe(cmd, pipeErr);
         }else{
             // Normal no pipe code
 
@@ -707,7 +713,7 @@ int main(void){
         }
         
         // Pipe complete message
-        if(numPipes != 0){
+        if(numPipes != 0 && retval != 255){
             fprintf(stderr, "+ completed '%s'", original_cmd);
             for(int k = 0; k < numPipes; k++){
                 fprintf(stderr, "[%d]", pipeErr[k]);
