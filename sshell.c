@@ -340,7 +340,7 @@ int mySystem(const char *cmdLine){
             }
             fprintf(stderr, "Error: command not found\n");
             fflush(stderr);
-            exit(255);
+            exit(1);
         }
         
         if (execv(fullpath, args) == -1) {
@@ -470,7 +470,7 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
             if(pipeErr[i] == 255){
                 fprintf(stderr, "Error: command not found\n");
                 fflush(stderr);
-                _exit(255);
+                _exit(1);
             }else{
                 _exit(errno);
             }
@@ -631,6 +631,7 @@ int main(void){
 
 
         int SKIP = 0;
+        int cdPwdComplete = 0;
         int cdErr = 0;
         int numPipes = numOfPipes(cmd);
         int pipeErr[numPipes + 1];
@@ -646,10 +647,13 @@ int main(void){
             if(!strcmp(cmd, "pwd")){
                 printWorkingDirectory();
                 SKIP = 1;
+                cdPwdComplete = 1;
             }
             //cd
             if(!strncmp(cmd, "cd", 2)){
                 cdErr = changeDirectory(cmd);
+                SKIP = 1;
+                cdPwdComplete = 1;
             }
             /* Regular command */
             // skip systemCall if SKIP = 1
@@ -713,7 +717,7 @@ int main(void){
         }
 
         // Normal complete message;
-        if (retval != 255 && SKIP == 0 && numPipes == 0)
+        if (retval != 255 && SKIP == 0 && numPipes == 0 || cdPwdComplete == 1)
         {
             fprintf(stderr, "+ completed '%s' [%d]\n", original_cmd, retval);
             fflush(stderr);
