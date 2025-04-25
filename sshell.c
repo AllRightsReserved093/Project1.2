@@ -400,12 +400,6 @@ int mislocatedRedirection(const char *cmd)
 
 // create numPipes of pipes
 int createPipes(int numPipes, int (*fds)[2]) {
-    // check if too many pipes
-    if (numPipes > MAX_PIPE) {
-        fprintf(stderr, "超过最大管道数 %d\n", MAX_PIPE);
-        return -1;
-    }
-
     // create pipes
     for (int i = 0; i < numPipes; ++i) {
         if (pipe(fds[i]) == -1) {
@@ -425,8 +419,14 @@ int createPipes(int numPipes, int (*fds)[2]) {
 // implement syscall() with pipe
 int mySysPipe(char *cmdLine, int *pipeErr) {
     int numPipes = 1;
-
-    char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
+    int numPipesAbandoned = 1;
+    // check if too many pipes
+    numPipes = numOfPipeCmd(cmdLine) - 1;
+    if (numPipes > MAX_PIPE) {
+        fprintf(stderr, "Error: too many pipes %d\n", MAX_PIPE);
+        return -1;
+    }
+    char **cmds = splitCmds(cmdLine, &numPipesAbandoned);  // numPipes = “|” 的个数 
     numPipes = numOfPipeCmd(cmdLine) - 1;
     if (cmds[0] == NULL) {
         fprintf(stderr, "Error: missing command\n");
