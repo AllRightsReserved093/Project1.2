@@ -60,7 +60,7 @@ char **splitCmds(const char *cmd, int *numPipes) {
     char *saveptr = NULL;
     char *seg = strtok_r(buf, "|", &saveptr);
     while (seg) {
-        if (count >= MAX_PIPE + 1) {
+        if (numOfPipes(cmd) + 1 >= MAX_PIPE + 1) {
             fprintf(stderr, "Error: too many pipes (max %d)\n", MAX_PIPE);
             fflush(stderr);
             free(buf);
@@ -115,6 +115,20 @@ int comExist(const char *cmd) {
 
     free(pathDup);
     return 0;
+}
+
+// get number of pipes.
+int numOfPipes(const char *cmd) {
+    size_t cnt = 0;
+    if(strchr(cmd, '|') != NULL){
+        for (size_t i = 0; cmd[i] != '\0'; i++) {
+            if (cmd[i] == '|') {
+                cnt++;
+            }
+        }
+        cnt++;
+    }
+    return cnt;
 }
 
 // Redirect input to file
@@ -423,7 +437,7 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
     char **cmds = splitCmds(cmdLine, &numPipes);  // numPipes = “|” 的个数 
 
     for(int i = 0; i <= numOfPipes(cmdLine); i++){
-        if(strlen(cmds[i]) == 0){
+        if(cmds[0] == NULL || strlen(cmds[i]) == 0){
             fprintf(stderr, "Error: missing command");
             fflush(stderr);
             return 255;
@@ -534,20 +548,6 @@ int changeDirectory(const char *cmd){
     free(argv);
 
     return 0;
-}
-
-// get number of pipes.
-int numOfPipes(const char *cmd) {
-    size_t cnt = 0;
-    if(strchr(cmd, '|') != NULL){
-        for (size_t i = 0; cmd[i] != '\0'; i++) {
-            if (cmd[i] == '|') {
-                cnt++;
-            }
-        }
-        cnt++;
-    }
-    return cnt;
 }
 
 int main(void){
