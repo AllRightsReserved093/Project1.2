@@ -16,6 +16,20 @@
 pid_t bg_pid = -1;
 char bg_cmd[CMDLINE_MAX];
 
+// get number of pipes.
+int numOfPipes(const char *cmd) {
+    size_t cnt = 0;
+    if(strchr(cmd, '|') != NULL){
+        for (size_t i = 0; cmd[i] != '\0'; i++) {
+            if (cmd[i] == '|') {
+                cnt++;
+            }
+        }
+        cnt++;
+    }
+    return cnt;
+}
+
 // Split Arguments
 // Input command line, and a int to receive err output
 // err = 0 if no error, err = 1 if too many arguments(skip printing complete message)
@@ -60,14 +74,6 @@ char **splitCmds(const char *cmd, int *numPipes) {
     char *saveptr = NULL;
     char *seg = strtok_r(buf, "|", &saveptr);
     while (seg) {
-        if (numOfPipes(cmd) + 1 >= MAX_PIPE + 1) {
-            fprintf(stderr, "Error: too many pipes (max %d)\n", MAX_PIPE);
-            fflush(stderr);
-            free(buf);
-            free(cmds);
-            exit(255);
-        }
-
         // remove space
         while (*seg == ' ' || *seg == '\t') seg++;
         char *end = seg + strlen(seg) - 1;
@@ -115,20 +121,6 @@ int comExist(const char *cmd) {
 
     free(pathDup);
     return 0;
-}
-
-// get number of pipes.
-int numOfPipes(const char *cmd) {
-    size_t cnt = 0;
-    if(strchr(cmd, '|') != NULL){
-        for (size_t i = 0; cmd[i] != '\0'; i++) {
-            if (cmd[i] == '|') {
-                cnt++;
-            }
-        }
-        cnt++;
-    }
-    return cnt;
 }
 
 // Redirect input to file
@@ -209,7 +201,7 @@ int outputRedirection(const char *cmdLine, char *cmdOutput, char *fileOutput)
         }
         
         if (strlen(cmdOutput) == 0){
-            fprintf(stderr, "Error: missing command");
+            fprintf(stderr, "Error: missing command\n");
             fflush(stderr);
             return 255;
         }
@@ -438,7 +430,7 @@ int mySysPipe(char *cmdLine, int *pipeErr) {
 
     for(int i = 0; i <= numOfPipes(cmdLine); i++){
         if(cmds[0] == NULL || strlen(cmds[i]) == 0){
-            fprintf(stderr, "Error: missing command");
+            fprintf(stderr, "Error: missing command\n");
             fflush(stderr);
             return 255;
         }
